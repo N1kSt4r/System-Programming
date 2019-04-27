@@ -4,10 +4,9 @@
 #include <stdio.h>
 #include "message.h"
 
-HANDLE hEventRead, hEventReaded;
-HANDLE hReadPipe, hWritePipe, hWritePipeWithoutInheretance;
-HANDLE* hReadPipes;
-HANDLE* hWritePipes;
+HANDLE hReadPipeServer, hWritePipeServer, hWritePipeWithoutInheretance;
+HANDLE* hReadPipeClients;
+HANDLE* hWritePipeClients;
 HANDLE* hProcesses;
 STARTUPINFO* si;
 PROCESS_INFORMATION* pi;
@@ -18,11 +17,11 @@ int WINAPI getMessages() {
 	int indexByName;
 	while (TRUE) {
 		Message mess;
-		ReadFile(hReadPipe, &mess, sizeof(mess), NULL, NULL);
+		ReadFile(hReadPipeServer, &mess, sizeof(mess), NULL, NULL);
 		for (indexByName = 0; indexByName < numClients && strcmp(names[indexByName], mess.receiver) != 0; ++indexByName);
 		if (indexByName < numClients && strcmp(mess.receiver, mess.sender) != 0) {
 			printf("from: %s; to: %s; message: %s\n", mess.sender, mess.receiver, mess.text);
-			WriteFile(hWritePipes[indexByName], &mess, sizeof(mess), NULL, NULL);
+			WriteFile(hWritePipeClients[indexByName], &mess, sizeof(mess), NULL, NULL);
 		}
 		else {
 			printf("Invalid client\n");
@@ -37,10 +36,10 @@ int main() {
 	attributes.lpSecurityDescriptor = NULL;
 	attributes.bInheritHandle = TRUE;
 
-	CreatePipe(&hReadPipe, &hWritePipeWithoutInheretance, NULL, 0);
+	CreatePipe(&hReadPipeServer, &hWritePipeWithoutInheretance, NULL, 0);
 	DuplicateHandle(
 		GetCurrentProcess(), hWritePipeWithoutInheretance,
-		GetCurrentProcess(), &hWritePipe,
+		GetCurrentProcess(), &hWritePipeServer,
 		0, TRUE, DUPLICATE_SAME_ACCESS
 	);
 	CloseHandle(hWritePipeWithoutInheretance);
@@ -51,19 +50,20 @@ int main() {
 	si = calloc(numClients, sizeof(STARTUPINFO));
 	pi = calloc(numClients, sizeof(PROCESS_INFORMATION));
 	hProcesses = calloc(numClients, sizeof(HANDLE));
-	hReadPipes = calloc(numClients, sizeof(HANDLE));
-	hWritePipes = calloc(numClients, sizeof(HANDLE));
+	hReadPipeClients = calloc(numClients, sizeof(HANDLE));
+	hWritePipeClients = calloc(numClients, sizeof(HANDLE));
 
 	HANDLE hThreadGetMessages = CreateThread(NULL, 0, getMessages, NULL, NULL, NULL);
 
 	names = calloc(numClients, sizeof(char*));
 	for (int i = 0; i < numClients; ++i) {
-		CreatePipe(&hReadPipes[i], &hWritePipes[i], &attributes, 0);
+		CreatePipe(&hReadPipeClients[i], &hWritePipeClients[i], &attributes, 0);
 
 		names[i] = malloc(10);
+		//printf("Enter name of client: ");
 		scanf("%s", names[i]);
 		char request[40];
-		sprintf(request, "Client.exe %s %d %d", names[i], hWritePipe, hReadPipes[i]);
+		sprintf(request, "Client.exe %s %d %d", names[i], hWritePipeServer, hReadPipeClients[i]);
 
 		si[i].cb = sizeof(STARTUPINFO);
 		CreateProcess(NULL, request, NULL, NULL, TRUE, CREATE_NEW_CONSOLE, NULL, NULL, &si[i], &pi[i]);
@@ -74,14 +74,12 @@ int main() {
 	for (int i = 0; i < numClients; ++i) {
 		CloseHandle(pi[i].hThread);
 		CloseHandle(pi[i].hProcess);
-		CloseHandle(hWritePipes[i]);
-		CloseHandle(hReadPipes[i]);
+		CloseHandle(hWritePipeClients[i]);
+		CloseHandle(hReadPipeClients[i]);
 	}
-	CloseHandle(hWritePipe);
-	CloseHandle(hReadPipe);
+	CloseHandle(hWritePipeServer);
+	CloseHandle(hReadPipeServer);
 
-	CloseHandle(hEventRead);
-	CloseHandle(hEventReaded);
 	CloseHandle(hThreadGetMessages);
 
 	for (int i = 0; i < numClients; ++i) {
