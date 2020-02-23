@@ -16,32 +16,3 @@ then given value
 Main
 	Gets from console name of binary file and number of records. Run and wait Creator.
 Run and wair Reporter. Show report on console
-	
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
